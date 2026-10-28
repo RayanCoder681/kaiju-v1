@@ -23,6 +23,9 @@ export function createApp(): Express {
   const app = express();
 
   app.disable('x-powered-by');
+  // Derrière le reverse-proxy TLS de l'hébergeur : nécessaire pour que req.ip soit la vraie
+  // IP cliente (rate-limiter) et pour que `secure`/HTTPS soient correctement détectés.
+  if (config.trustProxy > 0) app.set('trust proxy', config.trustProxy);
   app.use(express.json({ limit: '1mb' }));
 
   // Santé : utilisé par le script de lancement et les tests.

@@ -41,6 +41,20 @@ export interface AppConfig {
   uploadDir: string;
   defaultLocale: Locale;
   serverRoot: string;
+  /**
+   * URL publique de l'application en ligne (ex. https://kaiju.exemple.com), sans slash final.
+   * Quand elle est définie, le QR et l'URL de connexion pointent vers ce domaine au lieu de l'IP LAN.
+   * Vide en local : on retombe sur la détection LAN.
+   */
+  publicUrl: string | null;
+  /** Production : cookie `secure` (exige HTTPS). Activé automatiquement en production. */
+  cookieSecure: boolean;
+  /**
+   * Nombre de proxys de confiance devant l'app (reverse-proxy TLS de l'hébergeur).
+   * Nécessaire pour que req.ip soit la vraie IP cliente (rate-limiter) et pour `secure`.
+   * 0 = aucun (LAN direct). 1 = un proxy (cas usuel des plateformes).
+   */
+  trustProxy: number;
   limits: {
     /** Nombre maximal de participants par session (limite sûre, non désactivable par l'organisateur). */
     maxParticipantsPerSession: number;
@@ -64,6 +78,13 @@ export const config: AppConfig = {
   uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './uploads'),
   defaultLocale: (process.env.DEFAULT_LOCALE as Locale) ?? 'fr',
   serverRoot: SERVER_ROOT,
+  publicUrl: process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\/+$/, '') : null,
+  // `secure` : forcé en production, sauf COOKIE_SECURE=false explicite (ex. test derrière HTTP).
+  cookieSecure:
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === 'true'
+      : (process.env.NODE_ENV === 'production'),
+  trustProxy: Number(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? 1 : 0)),
   limits: {
     maxParticipantsPerSession: Number(process.env.MAX_PARTICIPANTS ?? 200),
     maxImageBytes: Number(process.env.MAX_IMAGE_BYTES ?? 5 * 1024 * 1024),

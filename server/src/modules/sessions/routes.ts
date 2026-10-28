@@ -65,17 +65,24 @@ sessionsRouter.get(
   '/:id/connection',
   handle(async (req, res) => {
     const session = getSessionOrThrow(getRepositories(), req.params.id);
+    const path = `/join?code=${session.code}`;
+    // En ligne : URL publique (domaine) ; en local : IP LAN détectée (jamais localhost).
     const lanIp = detectLanIPv4();
-    const joinUrl = lanIp ? buildJoinUrl(lanIp, config.port, `/join?code=${session.code}`) : null;
+    const joinUrl = config.publicUrl
+      ? `${config.publicUrl}${path}`
+      : lanIp
+        ? buildJoinUrl(lanIp, config.port, path)
+        : null;
     const qrDataUrl = joinUrl ? await QRCode.toDataURL(joinUrl, { margin: 1, width: 320 }) : null;
     res.json({
       ok: true,
       code: session.code,
-      lanIp,
+      lanIp: config.publicUrl ? null : lanIp,
       port: config.port,
       joinUrl,
       qrDataUrl,
-      lanAvailable: !!lanIp,
+      lanAvailable: !!joinUrl,
+      online: !!config.publicUrl,
     });
   }),
 );

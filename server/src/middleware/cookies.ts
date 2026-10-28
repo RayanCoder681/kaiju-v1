@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { config } from '../config.js';
 
 export const AUTH_COOKIE = 'kaiju_sid';
 
@@ -22,7 +23,8 @@ export function setAuthCookie(res: Response, token: string, maxAgeMs: number): v
     sameSite: 'lax',
     path: '/',
     maxAge: maxAgeMs,
-    // secure non activé : parcours LAN en HTTP. À activer derrière HTTPS (voir docs déploiement).
+    // secure : actif en production (HTTPS requis), inactif en LAN HTTP. Piloté par config.
+    secure: config.cookieSecure,
   });
 }
 

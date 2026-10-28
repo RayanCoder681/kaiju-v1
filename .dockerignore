@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+server/data
+server/backups
+server/uploads
+**/coverage
+.git
+.env
+.env.*
+*.sqlite
+*.sqlite3
+*.db
+/out
