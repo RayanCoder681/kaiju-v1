@@ -1,0 +1,9 @@
+{
+	email {$EMAIL}
+}
+
+# HTTPS automatique (Let's Encrypt) + proxy vers Kaiju, WebSocket inclus (Caddy le gère nativement).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kaiju:4000
+}

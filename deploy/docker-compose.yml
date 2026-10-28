@@ -1,0 +1,50 @@
+# Déploiement sur une VM (ex. Oracle Cloud Always Free) avec HTTPS automatique.
+# Kaiju (Node/SQLite/Socket.IO) derrière Caddy (reverse-proxy + TLS Let's Encrypt).
+#
+# Prérequis sur la VM : Docker + plugin compose, un nom de domaine pointant sur l'IP publique,
+# et les ports 80 + 443 ouverts (pare-feu VM et règles réseau de l'hébergeur).
+#
+# Lancement :   DOMAIN=kaiju.mondomaine.org EMAIL=moi@exemple.com docker compose -f deploy/docker-compose.yml up -d --build
+
+services:
+  kaiju:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      HOST: 0.0.0.0
+      TRUST_PROXY: "1"
+      PUBLIC_URL: "https://${DOMAIN}"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      DATABASE_PATH: /data/kaiju.sqlite
+      BACKUP_DIR: /data/backups
+      UPLOAD_DIR: /data/uploads
+      DEFAULT_LOCALE: fr
+    volumes:
+      - kaiju_data:/data            # persistance SQLite + médias + sauvegardes
+    expose:
+      - "4000"                      # exposé uniquement à Caddy, pas publiquement
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN}"
+      EMAIL: "${EMAIL}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data            # certificats TLS
+      - caddy_config:/config
+    depends_on:
+      - kaiju
+
+volumes:
+  kaiju_data:
+  caddy_data:
+  caddy_config:
