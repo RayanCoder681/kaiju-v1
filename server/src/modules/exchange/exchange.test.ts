@@ -10,7 +10,12 @@ import {
   exportActivitiesJson,
   importActivitiesJson,
   buildSessionReport,
+  exportFullBundle,
+  exportFullBundleCsv,
+  importFullBundle,
+  importFullBundleCsv,
 } from './service.js';
+import { importQuestionsCsv, QUESTIONS_CSV_TEMPLATE } from './questionsCsv.js';
 
 let repos: Repositories;
 
@@ -84,6 +89,83 @@ describe('Export / import JSON des activités', () => {
     expect(report.imported.map((i) => i.title)).toContain('Nouvelle');
     expect(report.errors).toHaveLength(1);
     expect(report.duplicates.map((d) => d.title)).toContain('Déjà là');
+  });
+});
+
+describe('Import CSV de questions', () => {
+  it('importe le modèle fourni avec une bonne réponse indexée à partir de 1', () => {
+    const report = importQuestionsCsv(repos, QUESTIONS_CSV_TEMPLATE);
+    expect(report.imported).toHaveLength(1);
+    const [activity] = repos.activityLibrary.list();
+    const definition = JSON.parse(activity!.definition_json) as ReturnType<typeof quizDraft>;
+    expect(definition.correctIndexes).toEqual([1]);
+    expect(definition.choices[1]!.text).toBe('O(log n)');
+  });
+
+  it('respecte les guillemets et isole les erreurs ligne par ligne', () => {
+    const csv = '\uFEFFtitre;question;choix;bonne_reponse;format;duree_s;explication;langue\r\n' +
+      '"Titre; avec séparateur";"Quel mot contient un ""guillemet"" ?";"non|oui";2;single;30;;fr\r\n' +
+      'Invalide;Question;une seule option;2;single;30;;fr\r\n';
+    const report = importQuestionsCsv(repos, csv);
+    expect(report.imported.map((item) => item.title)).toEqual(['Titre; avec séparateur']);
+    expect(report.errors).toHaveLength(1);
+  });
+});
+
+describe('Bundle de session — export et import en lot', () => {
+  it('restaure en une fois les activités, réponses, Q&A et réponses ouvertes', () => {
+    const { sessionId, sacId } = seededSession();
+    repos.team.create('team_src', sessionId, 'Équipe A', 0);
+    repos.participant.assignTeam('p1', 'team_src');
+    const qa = attachActivity(repos, sessionId, {
+      draft: { type: 'qa', title: 'Questions', allowAnonymous: true, contentLocale: 'fr' },
+    });
+    repos.qaQuestion.create({
+      id: 'question_src', session_activity_id: qa.id, participant_id: 'p1', anonymous: 0,
+      text: 'Comment ça marche ?', status: 'approved', projected: 1, created_at: 10,
+    });
+    repos.qaVote.create({ id: 'vote_src', question_id: 'question_src', participant_id: 'p2', created_at: 11 });
+    const open = attachActivity(repos, sessionId, {
+      draft: { type: 'open', title: 'Retour', question: 'Un commentaire ?', contentLocale: 'fr' },
+    });
+    repos.openAnswer.create({
+      id: 'open_src', session_activity_id: open.id, participant_id: 'p2', text: 'Très clair', hidden: 0,
+      group_label: null, manual_score: 5, projected: 0, created_at: 12,
+    });
+
+    const bundle = exportFullBundle(repos, sessionId);
+    const imported = importFullBundle(repos, bundle);
+    expect(imported.session.state).toBe('closed');
+    expect(imported.participants).toBe(2);
+    expect(imported.activities).toBe(3);
+    expect(imported.answers).toBe(2);
+    expect(imported.questions).toBe(1);
+    expect(imported.openAnswers).toBe(1);
+    const report = buildSessionReport(repos, imported.session.id);
+    expect(report.ranking.map((row) => row.totalScore)).toEqual([100, 0]);
+    const restored = exportFullBundle(repos, imported.session.id);
+    expect(restored.activities.find((activity) => activity.type === 'qa')?.questions[0]?.votes).toHaveLength(1);
+    expect(restored.activities.find((activity) => activity.type === 'open')?.openAnswers[0]?.text).toBe('Très clair');
+    expect(restored.activities.find((activity) => activity.id === sacId)).toBeUndefined();
+  });
+
+  it('rejette les références orphelines avant de créer la session importée', () => {
+    const { sessionId } = seededSession();
+    const bundle = exportFullBundle(repos, sessionId) as ReturnType<typeof exportFullBundle> & {
+      activities: { answers: { participantId: string }[] }[];
+    };
+    bundle.activities[0]!.answers[0]!.participantId = 'missing-participant';
+    expect(() => importFullBundle(repos, bundle)).toThrow();
+    expect(repos.session.listRecent()).toHaveLength(1);
+  });
+
+  it('restaure aussi la même archive depuis le CSV complet', () => {
+    const { sessionId } = seededSession();
+    const csv = exportFullBundleCsv(repos, sessionId);
+    const imported = importFullBundleCsv(repos, csv);
+    expect(imported.participants).toBe(2);
+    expect(imported.answers).toBe(2);
+    expect(buildSessionReport(repos, imported.session.id).ranking[0]?.totalScore).toBe(100);
   });
 });
 

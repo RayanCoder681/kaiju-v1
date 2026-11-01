@@ -1,7 +1,8 @@
 # Rapport de tests
 
-Dernière exécution : `npm test` (Vitest) + builds + essais runtime. Tous les résultats ci-dessous
-ont été **réellement exécutés**.
+Dernière campagne complète réussie : `npm test` (Vitest), builds et essais runtime décrits ci-dessous.
+Les résultats ont été réellement exécutés lors de cette campagne ; la revalidation locale du
+31 octobre 2026 est consignée plus bas.
 
 ## Synthèse
 
@@ -65,3 +66,17 @@ npm run typecheck
 npm run build
 npm test
 ```
+
+## Revalidation locale — 31 octobre 2026
+
+Environnement : Node `22.0.0`, npm `10.5.1`, Windows x64.
+
+- `npm run typecheck` : ✅ réussi (shared + server + client).
+- `npm run build` : ✅ réussi (serveur + client). Vite retire deux commentaires internes de Zod 4 du bundle.
+- `npm test` : ✅ **79/79** — shared 23/23, serveur 55/55, client 1/1.
+- `npm run seed:demo` : ✅ base fraîche créée avec le compte de démonstration et une session contenant quiz, sondage et Q&A.
+- `npm start` : ✅ serveur démarré et migrations vérifiées.
+- Essai HTTP local : ✅ `/api/health`, `/host` et `/projection?code=…` répondent ; connexion organisateur, liste et aperçu de la session, QR/URL LAN, lecture des 3 activités et déconnexion validés.
+- `http://10.2.10.73:4000` : adresse LAN annoncée pendant l'essai ; elle dépend du réseau utilisé et changera sur une autre machine.
+
+L'essai LAN avec des téléphones physiques et un vidéoprojecteur reste à refaire sur le réseau de la salle.

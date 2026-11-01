@@ -9,13 +9,13 @@ import { Library } from './host/Library.js';
 
 /** Console organisateur : gating d'authentification + routage interne. */
 export function Host() {
-  const { status, organizer, refresh } = useAuth();
+  const { status, organizer, refresh, setupKeyRequired } = useAuth();
 
   let content;
   if (status === 'loading') {
     content = <p className="text-muted">Chargement…</p>;
   } else if (status === 'needsSetup' || status === 'anonymous') {
-    content = <Login needsSetup={status === 'needsSetup'} onDone={() => void refresh()} />;
+    content = <Login needsSetup={status === 'needsSetup'} setupKeyRequired={setupKeyRequired} onDone={() => void refresh()} />;
   } else {
     content = (
       <Routes>

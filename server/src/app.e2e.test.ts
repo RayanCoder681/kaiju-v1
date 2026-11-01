@@ -36,13 +36,23 @@ describe('Parcours complet Phase 2 (HTTP)', () => {
   let reconnectToken = '';
 
   it('1. setup requis puis création du compte organisateur', async () => {
+    const { config } = await import('./config.js');
+    config.nodeEnv = 'production';
+    config.setupKey = 'cle-de-configuration-test-qui-est-secrete';
     const status = await agent.get('/api/auth/setup-status');
     expect(status.body.setupNeeded).toBe(true);
+    expect(status.body.setupKeyRequired).toBe(true);
+
+    const rejected = await agent.post('/api/auth/setup')
+      .send({ username: 'intrus', password: 'motdepasse1' });
+    expect(rejected.status).toBe(401);
 
     const setup = await agent
       .post('/api/auth/setup')
-      .send({ username: 'prof', password: 'motdepasse1' });
+      .send({ username: 'prof', password: 'motdepasse1', setupKey: config.setupKey });
     expect(setup.status).toBe(201);
+    config.nodeEnv = 'test';
+    config.setupKey = null;
   });
 
   it('2. une action admin sans session est refusée (401)', async () => {

@@ -36,6 +36,8 @@ export interface AppConfig {
   host: string;
   nodeEnv: 'development' | 'production' | 'test';
   sessionSecret: string;
+  /** Clé de premier enrôlement, obligatoire pour créer l'organisateur en production. */
+  setupKey: string | null;
   databasePath: string;
   backupDir: string;
   uploadDir: string;
@@ -73,6 +75,7 @@ export const config: AppConfig = {
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: (process.env.NODE_ENV as AppConfig['nodeEnv']) ?? 'development',
   sessionSecret: resolveSessionSecret(),
+  setupKey: process.env.SETUP_KEY?.trim() || null,
   databasePath: fromRoot(process.env.DATABASE_PATH ?? './data/kaiju.sqlite'),
   backupDir: fromRoot(process.env.BACKUP_DIR ?? './backups'),
   uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './uploads'),

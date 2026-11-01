@@ -14,6 +14,7 @@ import { teamsRouter } from './modules/teams/routes.js';
 import { maintenanceRouter } from './modules/maintenance/routes.js';
 import { exchangeRouter } from './modules/exchange/routes.js';
 import { mediaUploadRouter, mediaPublicRouter } from './modules/media/routes.js';
+import { requireHost } from './middleware/requireHost.js';
 
 /**
  * Fabrique l'application Express.
@@ -26,6 +27,12 @@ export function createApp(): Express {
   // Derrière le reverse-proxy TLS de l'hébergeur : nécessaire pour que req.ip soit la vraie
   // IP cliente (rate-limiter) et pour que `secure`/HTTPS soient correctement détectés.
   if (config.trustProxy > 0) app.set('trust proxy', config.trustProxy);
+  // Session archive JSON peut dépasser le plafond des commandes ordinaires. Authentifier
+  // avant de lire son corps volumineux ; toutes les autres routes gardent la limite stricte.
+  app.use('/api/sessions/import', requireHost, express.json({ limit: '55mb' }));
+  app.use('/api/sessions/import.csv', requireHost, express.json({ limit: '55mb' }));
+  // Le CSV de questions est du texte dans une enveloppe JSON et peut approcher 2 Mo.
+  app.use('/api/activities/import.csv', requireHost, express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '1mb' }));
 
   // Santé : utilisé par le script de lancement et les tests.

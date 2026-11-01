@@ -37,6 +37,7 @@ interface ActivityView {
   title?: string;
   state: ActivityState;
   snapshot: { title: string };
+  sequenceId?: string | null;
 }
 
 const TRANSITION_LABELS: Record<SessionState, string> = {
@@ -197,8 +198,25 @@ export function SessionDetail() {
 
       <Card>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-mono text-xs uppercase tracking-wider text-muted">Activités préparées</h2>
-          <Badge>{activities.length}</Badge>
+          <div>
+            <h2 className="font-mono text-xs uppercase tracking-wider text-muted">Questions et activités</h2>
+            <p className="mt-1 text-xs text-muted">L’enchaînement lance les quiz prêts à la suite, avec le timer de chaque question.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge>{activities.length}</Badge>
+            {activities.some((activity) => activity.sequenceId) ? (
+              <Button variant="secondary" onClick={() => control('host:activity:stop-all', {})}>
+                Arrêter l’enchaînement
+              </Button>
+            ) : (
+              <Button
+                disabled={!activities.some((activity) => activity.type === 'quiz' && activity.state === 'prepared') || activities.some((activity) => ['countdown', 'running', 'paused'].includes(activity.state))}
+                onClick={() => control('host:activity:start-all', {})}
+              >
+                Lancer toutes les questions
+              </Button>
+            )}
+          </div>
         </div>
         {activities.length > 0 && (
           <ul className="mb-4 space-y-2 text-sm">
@@ -290,6 +308,12 @@ export function SessionDetail() {
             className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-fg hover:bg-surface-elevated"
           >
             Export complet (JSON)
+          </a>
+          <a
+            href={`/api/sessions/${id}/export/bundle.csv`}
+            className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-fg hover:bg-surface-elevated"
+          >
+            Archive complète (CSV)
           </a>
         </div>
       </Card>

@@ -8,7 +8,12 @@ import {
   importActivitiesJson,
   buildSessionReport,
   exportFullBundle,
+  exportFullBundleCsv,
+  importFullBundleCsv,
+  importFullBundle,
 } from './service.js';
+import { importQuestionsCsv, QUESTIONS_CSV_TEMPLATE } from './questionsCsv.js';
+import { getDb } from '../../db/connection.js';
 
 /** Import/export + rapports (host). Monté sur /api. */
 export const exchangeRouter = Router();
@@ -20,6 +25,20 @@ exchangeRouter.get(
     res.json({ ok: true, report: buildSessionReport(getRepositories(), req.params.id) });
   }),
 );
+
+exchangeRouter.post(
+  '/sessions/import',
+  handle((req, res) => {
+    const importArchive = getDb().transaction(() => importFullBundle(getRepositories(), req.body));
+    const result = importArchive();
+    res.status(201).json({ ok: true, result });
+  }),
+);
+
+exchangeRouter.post('/sessions/import.csv', handle((req, res) => {
+  const importArchive = getDb().transaction(() => importFullBundleCsv(getRepositories(), req.body?.csv));
+  res.status(201).json({ ok: true, result: importArchive() });
+}));
 
 exchangeRouter.get(
   '/sessions/:id/export/results.csv',
@@ -40,6 +59,13 @@ exchangeRouter.get(
   }),
 );
 
+exchangeRouter.get('/sessions/:id/export/bundle.csv', handle((req, res) => {
+  const csv = exportFullBundleCsv(getRepositories(), req.params.id);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="kaiju-session-${req.params.id}.csv"`);
+  res.send(csv);
+}));
+
 exchangeRouter.get(
   '/activities/export.json',
   handle((_req, res) => {
@@ -52,6 +78,20 @@ exchangeRouter.post(
   '/activities/import',
   handle((req, res) => {
     const report = importActivitiesJson(getRepositories(), req.body);
+    res.json({ ok: true, report });
+  }),
+);
+
+exchangeRouter.get('/activities/import-template.csv', (_req, res) => {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="kaiju-questions-modele.csv"');
+  res.send(QUESTIONS_CSV_TEMPLATE);
+});
+
+exchangeRouter.post(
+  '/activities/import.csv',
+  handle((req, res) => {
+    const report = importQuestionsCsv(getRepositories(), req.body?.csv);
     res.json({ ok: true, report });
   }),
 );

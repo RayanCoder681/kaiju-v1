@@ -12,6 +12,7 @@ import { getRepositories } from '../context.js';
 import { getDb } from '../db/connection.js';
 import { actionLimiter } from '../lib/limiters.js';
 import { authenticate } from '../modules/auth/service.js';
+import { newId } from '../lib/ids.js';
 import {
   startActivity,
   closeActivity,
@@ -126,6 +127,43 @@ export function attachSocket(httpServer: HttpServer): KaijuIo {
       return socket.data.sessionId;
     };
 
+    const advanceSequence = (sessionId: string, sequenceId: string): void => {
+      const next = repos.sessionActivity.nextInSequence(sequenceId);
+      if (!next) {
+        repos.sessionActivity.clearSequence(sequenceId);
+        return;
+      }
+      const started = startActivity(repos, next.id, 3);
+      broadcastActivity(io, sessionId, started);
+    };
+
+    socket.on('host:activity:start-all', (_payload, cb) => {
+      const sessionId = requireHostSocket(cb);
+      if (!sessionId) return;
+      if (repos.sessionActivity.currentLocking(sessionId)) return cb({ ok: false, errorKey: 'error.validation' });
+      const quizIds = repos.sessionActivity.listBySession(sessionId)
+        .filter((activity) => activity.state === 'prepared' && activity.type === 'quiz')
+        .map((activity) => activity.id);
+      if (!quizIds.length) return cb({ ok: false, errorKey: 'error.validation' });
+      try {
+        const sequenceId = newId('seq');
+        repos.sessionActivity.markSequence(quizIds, sequenceId);
+        const first = startActivity(repos, quizIds[0]!);
+        broadcastActivity(io, sessionId, first);
+        cb({ ok: true, total: quizIds.length });
+      } catch {
+        cb({ ok: false, errorKey: 'error.validation' });
+      }
+    });
+
+    socket.on('host:activity:stop-all', (_payload, cb) => {
+      const sessionId = requireHostSocket(cb);
+      if (!sessionId) return;
+      const sequences = repos.sessionActivity.sequenceIds().filter((item) => item.session_id === sessionId);
+      for (const item of sequences) repos.sessionActivity.clearSequence(item.sequence_id);
+      cb({ ok: true });
+    });
+
     socket.on('host:activity:start', ({ activityId, countdownSec }, cb) => {
       const sessionId = requireHostSocket(cb);
       if (!sessionId) return;
@@ -145,6 +183,7 @@ export function attachSocket(httpServer: HttpServer): KaijuIo {
         const sac = closeActivity(repos, activityId);
         broadcastActivity(io, sessionId, sac);
         broadcastResults(io, repos, sessionId, sac);
+        if (sac.sequence_id) advanceSequence(sessionId, sac.sequence_id);
         cb({ ok: true });
       } catch {
         cb({ ok: false, errorKey: 'error.validation' });
@@ -326,13 +365,36 @@ function startClock(io: KaijuIo): void {
   const repos = getRepositories();
   clockTimer = setInterval(() => {
     const now = Date.now();
-    for (const sessionId of repos.sessionActivity.activeSessionIds()) {
+    const sessionIds = new Set([
+      ...repos.sessionActivity.activeSessionIds(),
+      ...repos.sessionActivity.sequenceIds().map((item) => item.session_id),
+    ]);
+    for (const sessionId of sessionIds) {
       const current = repos.sessionActivity.currentLocking(sessionId);
-      if (!current) continue;
+      if (!current) {
+        const sequence = repos.sessionActivity.sequenceIds().find((item) => item.session_id === sessionId);
+        if (sequence) {
+          const next = repos.sessionActivity.nextInSequence(sequence.sequence_id);
+          if (next) {
+            const started = startActivity(repos, next.id, 3);
+            broadcastActivity(io, sessionId, started);
+          } else repos.sessionActivity.clearSequence(sequence.sequence_id);
+        }
+        continue;
+      }
       const { changed, sac } = tickActivity(repos, current.id, now);
       if (changed) {
         broadcastActivity(io, sessionId, sac);
-        if (sac.state === 'closed') broadcastResults(io, repos, sessionId, sac);
+        if (sac.state === 'closed') {
+          broadcastResults(io, repos, sessionId, sac);
+          if (sac.sequence_id) {
+            const next = repos.sessionActivity.nextInSequence(sac.sequence_id);
+            if (next) {
+              const started = startActivity(repos, next.id, 3);
+              broadcastActivity(io, sessionId, started);
+            } else repos.sessionActivity.clearSequence(sac.sequence_id);
+          }
+        }
       } else if (sac.deadline_at) {
         const remainingMs = Math.max(0, sac.deadline_at - now);
         const tick = { activityId: sac.id, remainingMs };

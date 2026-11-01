@@ -31,6 +31,7 @@ function toSessionActivityView(a: SessionActivityRow) {
     type: a.type,
     position: a.position,
     state: a.state,
+    sequenceId: a.sequence_id ?? null,
     snapshot: JSON.parse(a.snapshot_json),
     resultsPublishedConsole: !!a.results_published_console,
     resultsPublishedProjection: !!a.results_published_projection,

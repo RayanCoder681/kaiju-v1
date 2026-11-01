@@ -45,7 +45,7 @@ export function Projection() {
   const total = results?.choiceCounts?.reduce((a, b) => a + b, 0) ?? 0;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-10 text-center text-fg">
+    <div className="projection-screen flex min-h-screen flex-col items-center justify-center bg-bg px-10 text-center text-fg">
       {!activity ? (
         <>
           <div className="flex items-center gap-3">

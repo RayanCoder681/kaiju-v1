@@ -16,6 +16,7 @@ let sessionId = '';
 let code = '';
 let activityId = '';
 let shortActivityId = '';
+let sequenceActivityIds: string[] = [];
 let hostCookie = '';
 let reconnectToken = '';
 
@@ -44,6 +45,18 @@ function waitFor<T = unknown>(socket: Socket, event: string, ms = 2000): Promise
 
 function emitAck<T = { ok: boolean }>(socket: Socket, event: string, payload: unknown): Promise<T> {
   return new Promise((resolve) => socket.emit(event, payload, resolve));
+}
+
+function waitForActivity(socket: Socket, activityId: string, state: string, ms = 9000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timeout activity ${activityId} ${state}`)), ms);
+    socket.on('activity:changed', (payload: { activity: { id: string; state: string } | null }) => {
+      if (payload.activity?.id === activityId && payload.activity.state === state) {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  });
 }
 
 beforeAll(async () => {
@@ -77,6 +90,10 @@ beforeAll(async () => {
   const { attachActivity } = await import('../modules/activities/service.js');
   activityId = attachActivity(repos, sessionId, { draft: quizDraft }).id;
   shortActivityId = attachActivity(repos, sessionId, { draft: { ...quizDraft, timerSec: 5 } }).id;
+  sequenceActivityIds = [
+    attachActivity(repos, sessionId, { draft: { ...quizDraft, title: 'Série 1', timerSec: 5 } }).id,
+    attachActivity(repos, sessionId, { draft: { ...quizDraft, title: 'Série 2', timerSec: 5 } }).id,
+  ];
 
   const { joinSession } = await import('../modules/participants/service.js');
   reconnectToken = joinSession(repos, { code, pseudonym: 'Alice' }).reconnectToken;
@@ -177,6 +194,24 @@ describe('Temps réel — parcours live', () => {
     host.disconnect();
     projection.disconnect();
   }, 12000);
+
+  it('enchaîne les questions préparées en respectant leur minuteur', async () => {
+    const host = connect({ Cookie: hostCookie });
+    await emitAck(host, 'host:hello', { sessionId });
+    const firstStarted = waitFor<{ activity: { id: string; state: string } }>(host, 'activity:changed');
+    const started = await emitAck<{ ok: boolean; total?: number }>(host, 'host:activity:start-all', {});
+    expect(started).toMatchObject({ ok: true, total: 2 });
+    expect(await firstStarted).toMatchObject({ activity: { id: sequenceActivityIds[0], state: 'running' } });
+
+    const firstClosed = waitForActivity(host, sequenceActivityIds[0]!, 'closed');
+    const secondCountdown = waitForActivity(host, sequenceActivityIds[1]!, 'countdown');
+    const secondRunning = waitForActivity(host, sequenceActivityIds[1]!, 'running', 12000);
+    await firstClosed;
+    await secondCountdown;
+    await secondRunning;
+    await emitAck(host, 'host:activity:stop-all', {});
+    host.disconnect();
+  }, 20000);
 
   it('refuse une soumission sur une activité clôturée (réponse tardive)', async () => {
     const participant = connect();

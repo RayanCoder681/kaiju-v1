@@ -5,10 +5,11 @@ import { Card, Button, Input, Field } from '../../ui/primitives.js';
 import type { MessageKey } from '@kaiju/shared';
 
 /** Connexion organisateur, ou création du compte au premier démarrage. */
-export function Login({ needsSetup, onDone }: { needsSetup: boolean; onDone: () => void }) {
+export function Login({ needsSetup, setupKeyRequired, onDone }: { needsSetup: boolean; setupKeyRequired: boolean; onDone: () => void }) {
   const { t } = useI18n();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [setupKey, setSetupKey] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -18,7 +19,7 @@ export function Login({ needsSetup, onDone }: { needsSetup: boolean; onDone: () 
     setBusy(true);
     try {
       if (needsSetup) {
-        await api.post('/api/auth/setup', { username, password });
+        await api.post('/api/auth/setup', { username, password, ...(setupKey ? { setupKey } : {}) });
       }
       await api.post('/api/auth/login', { username, password });
       onDone();
@@ -37,7 +38,9 @@ export function Login({ needsSetup, onDone }: { needsSetup: boolean; onDone: () 
       </h1>
       <p className="mb-6 text-sm text-muted">
         {needsSetup
-          ? 'Premier démarrage : définissez l’identifiant et le mot de passe du compte local.'
+          ? setupKeyRequired
+            ? 'Premier démarrage : utilisez la clé de configuration fournie par l’administrateur du serveur.'
+            : 'Premier démarrage : définissez l’identifiant et le mot de passe du compte local.'
           : 'Accédez à votre console de pilotage.'}
       </p>
       <Card>
@@ -55,6 +58,11 @@ export function Login({ needsSetup, onDone }: { needsSetup: boolean; onDone: () 
               minLength={needsSetup ? 8 : 1}
             />
           </Field>
+          {needsSetup && setupKeyRequired && (
+            <Field label="Clé de configuration serveur">
+              <Input type="password" value={setupKey} onChange={(e) => setSetupKey(e.target.value)} autoComplete="off" required />
+            </Field>
+          )}
           {needsSetup && (
             <p className="text-xs text-muted">Mot de passe : 8 caractères minimum.</p>
           )}

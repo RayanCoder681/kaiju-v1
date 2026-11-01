@@ -9,9 +9,9 @@
  *   npm run dev:server   puis   npm run dev:client
  */
 import { spawnSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import './assert-supported-node.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -23,23 +23,10 @@ function run(cmd, args, opts = {}) {
   }
 }
 
-// 1. Version de Node.
-const major = Number(process.versions.node.split('.')[0]);
-if (major < 20) {
-  console.error(`Node 20+ requis. Version détectée : ${process.versions.node}`);
-  process.exit(1);
-}
+// 1. Rebuild on every launch so a presentation never serves stale dist files.
+run('npm', ['run', 'build']);
 
-// 2. Builds nécessaires.
-const sharedDist = join(root, 'packages/shared/dist/index.js');
-const serverDist = join(root, 'server/dist/index.js');
-const clientDist = join(root, 'client/dist/index.html');
-
-if (!existsSync(sharedDist)) run('npm', ['run', 'build:shared']);
-if (!existsSync(serverDist)) run('npm', ['run', 'build:server']);
-if (!existsSync(clientDist)) run('npm', ['run', 'build:client']);
-
-// 3. Démarrage serveur.
+// 2. Démarrage serveur.
 console.log('\nDémarrage du serveur Kaiju…');
 const child = spawn('node', ['server/dist/index.js'], {
   cwd: root,

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useI18n } from '../../ui/I18nProvider.js';
@@ -18,10 +18,23 @@ export function Dashboard({ organizerName }: { organizerName: string }) {
   const [sessions, setSessions] = useState<SessionView[]>([]);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const archiveFileRef = useRef<HTMLInputElement>(null);
 
   const load = async (): Promise<void> => {
-    const res = await api.get<{ sessions: SessionView[] }>('/api/sessions');
-    setSessions(res.sessions);
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await api.get<{ sessions: SessionView[] }>('/api/sessions');
+      setSessions(res.sessions);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     void load();
@@ -40,12 +53,35 @@ export function Dashboard({ organizerName }: { organizerName: string }) {
     }
   };
 
+  const importArchive = async (file: File): Promise<void> => {
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const text = await file.text();
+      const isCsv = file.name.toLocaleLowerCase().endsWith('.csv');
+      const response = isCsv
+        ? await api.post<{ result: { session: { title: string }; participants: number; activities: number } }>(
+            '/api/sessions/import.csv', { csv: text },
+          )
+        : await api.post<{ result: { session: { title: string }; participants: number; activities: number } }>(
+            '/api/sessions/import', JSON.parse(text) as unknown,
+          );
+      setImportMessage(`Session « ${response.result.session.title} » importée (${response.result.participants} participants, ${response.result.activities} activités).`);
+      await load();
+    } catch {
+      setImportMessage('Import impossible. Sélectionnez une archive complète CSV ou JSON Kaiju valide.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="dashboard-heading mb-8 flex items-center justify-between gap-5">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Bonjour {organizerName}</h1>
-          <p className="text-sm text-muted">Vos sessions interactives</p>
+          <p className="eyebrow"><span className="eyebrow__line" />ESPACE ORGANISATEUR</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Bonjour {organizerName}</h1>
+          <p className="mt-1 text-sm text-muted">La prochaine bonne idée commence ici.</p>
         </div>
         <div className="flex gap-2">
           <Link
@@ -64,7 +100,7 @@ export function Dashboard({ organizerName }: { organizerName: string }) {
         </div>
       </div>
 
-      <Card className="mb-8">
+      <Card className="dashboard-create mb-10">
         <form className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Field label="Nouvelle session — titre">
@@ -87,11 +123,46 @@ export function Dashboard({ organizerName }: { organizerName: string }) {
         </form>
       </Card>
 
-      <h2 className="mb-3 font-display text-lg font-semibold">Historique</h2>
-      {sessions.length === 0 ? (
-        <p className="text-sm text-muted">{t('common.loading') === '' ? '' : 'Aucune session pour le moment.'}</p>
+      <Card className="dashboard-archive-import mb-10">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Importer les résultats d’une session</h2>
+            <p className="mt-1 text-sm text-muted">Réimporte en une fois activités, participants et réponses depuis une archive CSV ou JSON Kaiju.</p>
+          </div>
+          <input
+            ref={archiveFileRef}
+            type="file"
+            accept="application/json,.json,text/csv,.csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importArchive(file);
+              event.target.value = '';
+            }}
+          />
+          <Button variant="secondary" disabled={importing} onClick={() => archiveFileRef.current?.click()}>
+            {importing ? 'Import en cours…' : 'Choisir une archive CSV / JSON'}
+          </Button>
+        </div>
+        {importMessage && <p className="mt-3 text-sm text-muted" role="status">{importMessage}</p>}
+      </Card>
+
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div><p className="eyebrow mb-2"><span className="eyebrow__line" />VOTRE ACTIVITÉ</p><h2 className="font-display text-2xl font-bold">Sessions récentes</h2></div>
+        <span className="font-mono text-xs text-muted">{sessions.length.toString().padStart(2, '0')} SESSION{sessions.length > 1 ? 'S' : ''}</span>
+      </div>
+      {loading ? (
+        <div className="dashboard-state" role="status"><span className="dashboard-state__spinner" />Chargement de vos sessions…</div>
+      ) : loadError ? (
+        <div className="dashboard-state dashboard-state--error" role="alert"><span>La liste n’a pas pu être chargée.</span><Button variant="secondary" onClick={() => void load()}>Réessayer</Button></div>
+      ) : sessions.length === 0 ? (
+        <div className="dashboard-empty">
+          <span className="dashboard-empty__mark">✳</span>
+          <div><h3>La salle est encore calme.</h3><p>Créez une session pour inviter votre public à participer.</p></div>
+          <span className="dashboard-empty__arrow" aria-hidden="true">↗</span>
+        </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="dashboard-sessions space-y-2">
           {sessions.map((s) => (
             <li key={s.id}>
               <Link

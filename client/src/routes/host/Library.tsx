@@ -10,6 +10,7 @@ interface LibItem {
   used: boolean;
 }
 interface ImportReport {
+  lineOffset?: number;
   imported: { title: string }[];
   duplicates: { title: string }[];
   errors: { index: number; error: string }[];
@@ -36,6 +37,12 @@ export function Library() {
 
   const onImport = async (file: File): Promise<void> => {
     const text = await file.text();
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      const r = await api.post<{ report: ImportReport }>('/api/activities/import.csv', { csv: text });
+      setReport(r.report);
+      await load();
+      return;
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
@@ -73,13 +80,19 @@ export function Library() {
           >
             Exporter (JSON)
           </a>
+          <a
+            href="/api/activities/import-template.csv"
+            className="rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-fg hover:bg-surface-elevated"
+          >
+            Modèle questions CSV
+          </a>
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-            Importer (JSON)
+            Importer (CSV / JSON)
           </Button>
           <input
             ref={fileRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/json,.json,text/csv,.csv"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -96,8 +109,8 @@ export function Library() {
             {report.errors.length > 0 && (
               <ul className="mt-1 text-danger">
                 {report.errors.map((e, i) => (
-                  <li key={i}>
-                    Ligne {e.index + 1} : {e.error}
+                    <li key={i}>
+                    Ligne {e.index + (report.lineOffset ?? 1)} : {e.error}
                   </li>
                 ))}
               </ul>

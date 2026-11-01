@@ -12,6 +12,7 @@ export type AuthStatus = 'loading' | 'needsSetup' | 'anonymous' | 'authed';
 export function useAuth() {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [organizer, setOrganizer] = useState<Organizer | null>(null);
+  const [setupKeyRequired, setSetupKeyRequired] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -20,8 +21,9 @@ export function useAuth() {
       setStatus('authed');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        const s = await api.get<{ setupNeeded: boolean }>('/api/auth/setup-status');
+        const s = await api.get<{ setupNeeded: boolean; setupKeyRequired?: boolean }>('/api/auth/setup-status');
         setOrganizer(null);
+        setSetupKeyRequired(s.setupKeyRequired ?? false);
         setStatus(s.setupNeeded ? 'needsSetup' : 'anonymous');
       } else {
         setStatus('anonymous');
@@ -33,5 +35,5 @@ export function useAuth() {
     void refresh();
   }, [refresh]);
 
-  return { status, organizer, refresh, setStatus };
+  return { status, organizer, refresh, setStatus, setupKeyRequired };
 }

@@ -4,16 +4,17 @@ Objectif : héberger Kaiju **gratuitement**, avec données **persistantes** et *
 sans réécrire la base SQLite. On utilise une VM gratuite (ex. Oracle Cloud Always Free) qui exécute
 l'image Docker Kaiju derrière Caddy (HTTPS automatique).
 
-> Pourquoi pas un PaaS « un clic » gratuit ? Les tiers gratuits de Railway/Fly/Render soit facturent
-> le disque persistant, soit s'endorment et effacent le fichier SQLite au redémarrage. Une VM Always
-> Free garde le disque et reste allumée.
+> Les plateformes gratuites proposées n'offrent pas toutes un stockage SQLite durable. Oracle peut
+> aussi récupérer une VM Always Free si elle reste sous les seuils d'utilisation pendant 7 jours ;
+> ce parcours limite les coûts, sans garantir une disponibilité continue.
 
 ## 0. Ce qu'il faut
 
 - Un **compte** chez un fournisseur de VM gratuite. Recommandé : **Oracle Cloud Free Tier**
   (« Always Free », VM ARM Ampere, disque persistant, gratuit en continu). Alternatives : Google
   Cloud `e2-micro` Always Free, ou tout petit VPS si un coût minime est acceptable.
-  *(L'inscription demande une carte pour vérification ; l'usage Always Free reste gratuit.)*
+  *(L'inscription demande une carte pour vérification ; capacité VM et récupération des instances
+  inactives dépendent des règles OCI en vigueur.)*
 - Un **nom de domaine** pointant vers l'IP publique de la VM (un sous-domaine gratuit convient :
   DuckDNS, ou un domaine que tu possèdes — ton site `zoxbt.is-a.dev` peut fournir un sous-domaine).
   Le domaine est nécessaire pour le HTTPS automatique.
@@ -56,12 +57,14 @@ Créer un enregistrement **A** `kaiju.tondomaine` → `<IP_PUBLIQUE>` de la VM. 
 export DOMAIN=kaiju.tondomaine
 export EMAIL=ton-email@exemple.com
 export SESSION_SECRET=$(openssl rand -hex 48)
+export SETUP_KEY=$(openssl rand -hex 32)
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 Caddy obtient automatiquement un certificat Let's Encrypt pour `DOMAIN`. Au bout d'une minute :
 
-- Console : `https://kaiju.tondomaine/host` → créer le compte organisateur.
+- Console : `https://kaiju.tondomaine/host` → saisir `SETUP_KEY` pour créer le compte organisateur.
+- Après la création du compte, retirer `SETUP_KEY` de l’environnement est recommandé.
 - Les participants rejoignent via le QR, qui encode désormais l'URL publique.
 
 ## 6. Vérifications (voir aussi `docs/deploiement-en-ligne.md`)

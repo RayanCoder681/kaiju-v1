@@ -27,6 +27,7 @@ Monorepo npm workspaces : `packages/shared` (types/contrats/thème/i18n), `serve
 - [`docs/guide-windows.md`](docs/guide-windows.md) — installation, lancement, pare-feu, Wi-Fi, hors ligne
 - [`docs/demo.md`](docs/demo.md) — scénario de démonstration + checklist d'acceptation
 - [`docs/api.md`](docs/api.md) — API REST et événements Socket.IO
+- [`docs/import-export.md`](docs/import-export.md) — formats d’import des questions et d’archive de session
 - [`docs/schema.md`](docs/schema.md) — schéma de base et migrations
 - [`docs/exploitation.md`](docs/exploitation.md) — sauvegarde, restauration, transfert, mise à jour
 - [`docs/rapport-tests.md`](docs/rapport-tests.md) — rapport de tests

@@ -65,6 +65,7 @@ export interface SessionActivityRow {
   deadline_at: number | null;
   closed_at: number | null;
   created_at: number;
+  sequence_id?: string | null;
 }
 
 /* ───────────── Fabrique de repositories ───────────── */
@@ -163,10 +164,10 @@ export function makeRepositories(db: Database.Database) {
           now,
         );
       },
-      listBySession(sessionId: string): { id: string; name: string }[] {
+      listBySession(sessionId: string): { id: string; name: string; created_at: number }[] {
         return db
-          .prepare('SELECT id, name FROM team WHERE session_id = ? ORDER BY created_at')
-          .all(sessionId) as { id: string; name: string }[];
+          .prepare('SELECT id, name, created_at FROM team WHERE session_id = ? ORDER BY created_at')
+          .all(sessionId) as { id: string; name: string; created_at: number }[];
       },
       findById(id: string): { id: string; session_id: string; name: string } | undefined {
         return db.prepare('SELECT id, session_id, name FROM team WHERE id = ?').get(id) as
@@ -275,6 +276,16 @@ export function makeRepositories(db: Database.Database) {
           .prepare('SELECT payload_json FROM answer WHERE session_activity_id = ?')
           .all(sacId) as { payload_json: string }[];
       },
+      listByActivity(sacId: string): {
+        id: string; participant_id: string; client_submission_id: string; payload_json: string;
+        score: number | null; answer_time_ms: number; created_at: number;
+      }[] {
+        return db.prepare('SELECT * FROM answer WHERE session_activity_id = ? ORDER BY created_at, id')
+          .all(sacId) as {
+            id: string; participant_id: string; client_submission_id: string; payload_json: string;
+            score: number | null; answer_time_ms: number; created_at: number;
+          }[];
+      },
       /** Score total par participant pour UNE activité (export CSV par colonne). */
       rankingRowsForActivity(sessionActivityId: string): { pid: string; total: number }[] {
         return db
@@ -347,6 +358,22 @@ export function makeRepositories(db: Database.Database) {
           )
           .get(sessionId) as SessionActivityRow | undefined;
       },
+      markSequence(activityIds: string[], sequenceId: string): void {
+        const update = db.prepare('UPDATE session_activity SET sequence_id = ? WHERE id = ? AND state = \'prepared\'');
+        const tx = db.transaction(() => activityIds.forEach((id) => update.run(sequenceId, id)));
+        tx();
+      },
+      nextInSequence(sequenceId: string): SessionActivityRow | undefined {
+        return db.prepare("SELECT * FROM session_activity WHERE sequence_id = ? AND state = 'prepared' ORDER BY position LIMIT 1")
+          .get(sequenceId) as SessionActivityRow | undefined;
+      },
+      clearSequence(sequenceId: string): void {
+        db.prepare('UPDATE session_activity SET sequence_id = NULL WHERE sequence_id = ?').run(sequenceId);
+      },
+      sequenceIds(): { session_id: string; sequence_id: string }[] {
+        return db.prepare('SELECT DISTINCT session_id, sequence_id FROM session_activity WHERE sequence_id IS NOT NULL')
+          .all() as { session_id: string; sequence_id: string }[];
+      },
       updateState(id: string, state: ActivityState, patch: Partial<SessionActivityRow> = {}): void {
         db.prepare(
           `UPDATE session_activity SET state = ?,
@@ -355,6 +382,61 @@ export function makeRepositories(db: Database.Database) {
              closed_at = COALESCE(?, closed_at)
            WHERE id = ?`,
         ).run(state, patch.started_at ?? null, patch.deadline_at ?? null, patch.closed_at ?? null, id);
+      },
+    },
+
+    qaQuestion: {
+      listByActivity(activityId: string): {
+        id: string; participant_id: string | null; anonymous: number; text: string;
+        status: string; projected: number; created_at: number;
+      }[] {
+        return db.prepare('SELECT * FROM qa_question WHERE session_activity_id = ? ORDER BY created_at, id')
+          .all(activityId) as {
+            id: string; participant_id: string | null; anonymous: number; text: string;
+            status: string; projected: number; created_at: number;
+          }[];
+      },
+      create(row: {
+        id: string; session_activity_id: string; participant_id: string | null; anonymous: number;
+        text: string; status: string; projected: number; created_at: number;
+      }): void {
+        db.prepare(`INSERT INTO qa_question
+          (id,session_activity_id,participant_id,anonymous,text,status,projected,created_at)
+          VALUES (@id,@session_activity_id,@participant_id,@anonymous,@text,@status,@projected,@created_at)`)
+          .run(row);
+      },
+    },
+
+    qaVote: {
+      listByQuestion(questionId: string): { participant_id: string; created_at: number }[] {
+        return db.prepare('SELECT participant_id, created_at FROM qa_vote WHERE question_id = ? ORDER BY created_at, id')
+          .all(questionId) as { participant_id: string; created_at: number }[];
+      },
+      create(row: { id: string; question_id: string; participant_id: string; created_at: number }): void {
+        db.prepare('INSERT INTO qa_vote (id,question_id,participant_id,created_at) VALUES (@id,@question_id,@participant_id,@created_at)')
+          .run(row);
+      },
+    },
+
+    openAnswer: {
+      listByActivity(activityId: string): {
+        id: string; participant_id: string | null; text: string; hidden: number;
+        group_label: string | null; manual_score: number | null; projected: number; created_at: number;
+      }[] {
+        return db.prepare('SELECT * FROM open_answer WHERE session_activity_id = ? ORDER BY created_at, id')
+          .all(activityId) as {
+            id: string; participant_id: string | null; text: string; hidden: number;
+            group_label: string | null; manual_score: number | null; projected: number; created_at: number;
+          }[];
+      },
+      create(row: {
+        id: string; session_activity_id: string; participant_id: string | null; text: string;
+        hidden: number; group_label: string | null; manual_score: number | null; projected: number; created_at: number;
+      }): void {
+        db.prepare(`INSERT INTO open_answer
+          (id,session_activity_id,participant_id,text,hidden,group_label,manual_score,projected,created_at)
+          VALUES (@id,@session_activity_id,@participant_id,@text,@hidden,@group_label,@manual_score,@projected,@created_at)`)
+          .run(row);
       },
     },
   };

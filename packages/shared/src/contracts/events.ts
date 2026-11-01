@@ -67,6 +67,8 @@ export interface ServerToClientEvents {
 
 /** Événements émis par un CLIENT vers le serveur (tous revalidés + autorisés côté serveur). */
 export interface ClientToServerEvents {
+  'host:activity:start-all': (p: Record<string, never>, cb: (r: Ack & { total?: number }) => void) => void;
+  'host:activity:stop-all': (p: Record<string, never>, cb: (r: Ack) => void) => void;
   'host:activity:start': (
     p: { activityId: string; countdownSec?: number },
     cb: (r: Ack) => void,

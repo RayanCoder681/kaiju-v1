@@ -65,7 +65,7 @@ export function ParticipantLive({ code, reconnectToken, pseudonym, sessionTitle 
   const answered = submittedFor === activity?.id;
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="participant-live mx-auto max-w-md">
       <div className="mb-4 flex items-center justify-between">
         <Badge>{pseudonym}</Badge>
         {running && seconds !== null && (
@@ -80,7 +80,7 @@ export function ParticipantLive({ code, reconnectToken, pseudonym, sessionTitle 
       )}
 
       {!activity && (
-        <div className="text-center">
+        <div className="participant-waiting text-center">
           <h1 className="font-display text-xl font-bold tracking-tight">{sessionTitle}</h1>
           <p className="mt-2 text-muted">{t('join.waiting')}</p>
         </div>

@@ -9,3 +9,6 @@ export const actionLimiter = new RateLimiter(
   config.limits.rateWindowMs,
   config.limits.rateMaxActions,
 );
+
+/** Limiteur d’authentification : au plus 10 tentatives par IP sur 15 minutes. */
+export const authLimiter = new RateLimiter(15 * 60_000, 10);
